@@ -1,1 +1,1 @@
-docker run -d --name stockaugur -p 80:80 stockaugur:v0.1
+docker run -d --name stockaugur -p 80:80 stockaugur:v1.0

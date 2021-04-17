@@ -1,1 +1,1 @@
-docker build -t stockaugur:v0.1 .
+docker build -t stockaugur:v1.0 .

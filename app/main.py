@@ -1,14 +1,25 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
 
 import pandas as pd
 import numpy as np
-from fbprophet import Prophet
+from prophet import Prophet
 import yfinance as yf
 
 
 app = FastAPI()
+
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def getTickerForcast(ticker, period, dataPeriod):
@@ -22,19 +33,21 @@ def getTickerForcast(ticker, period, dataPeriod):
     m.fit(df)
     future = m.make_future_dataframe(periods=period)
     prediction = m.predict(future)
-    return prediction
+    prediction = prediction.tail(period)
+    return prediction.to_dict('records')
 
 
 def getTickerData(ticker, dataPeriod):
     stockTicker = yf.Ticker(ticker)
     data = stockTicker.history(period=dataPeriod, interval="1d")
+
     return pd.DataFrame({
         'date': data.index.values,
         'open': data['Open'].values,
         'high': data['High'].values,
         'low': data['Low'].values,
         'close': data['Close'].values
-    })
+    }).to_dict('records')
 
 
 class Stock(BaseModel):
