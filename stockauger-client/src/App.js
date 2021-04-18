@@ -16,7 +16,12 @@ import {
   TableCell,
   Paper,
 } from "@material-ui/core";
-//import { ResponsiveLine } from "@nivo/line";
+
+import Moment from "react-moment";
+import "moment-timezone";
+
+import * as am4core from "@amcharts/amcharts4/core";
+import * as am4charts from "@amcharts/amcharts4/charts";
 
 const api = axios.create({
   baseURL: "http://localhost:80/api/",
@@ -38,7 +43,7 @@ const useStyles = makeStyles((theme) => ({
   },
   tickerInput: {
     width: "90%",
-    [theme.breakpoints.down("md")]: {
+    [theme.breakpoints.down("sm")]: {
       width: "100%",
     },
   },
@@ -76,7 +81,6 @@ const StyledTableRow = withStyles((theme) => ({
 
 const DataTable = ({ data }) => {
   const classes = useStyles();
-  console.log(data);
   return (
     <TableContainer className={classes.table} component={Paper}>
       <Table aria-label="customized table">
@@ -90,25 +94,27 @@ const DataTable = ({ data }) => {
           </TableRow>
         </TableHead>
         <TableBody>
-          {data.map((row) => (
-            <StyledTableRow key="asd">
-              <StyledTableCell component="th" scope="row">
-                {row.date.slice(0, 10)}
-              </StyledTableCell>
-              <StyledTableCell align="center">
-                {row.low.toFixed(4)}
-              </StyledTableCell>
-              <StyledTableCell align="center">
-                {row.high.toFixed(4)}
-              </StyledTableCell>
-              <StyledTableCell align="center">
-                {row.close.toFixed(4)}
-              </StyledTableCell>
-              <StyledTableCell align="center">
-                {row.close.toFixed(4)}
-              </StyledTableCell>
-            </StyledTableRow>
-          ))}
+          {data.map((row, index) => {
+            return (
+              <StyledTableRow key={index}>
+                <StyledTableCell component="th" scope="row">
+                  <Moment format="DD/MM/YYYY">{row.date}</Moment>
+                </StyledTableCell>
+                <StyledTableCell align="center">
+                  {row.low.toFixed(4)}
+                </StyledTableCell>
+                <StyledTableCell align="center">
+                  {row.high.toFixed(4)}
+                </StyledTableCell>
+                <StyledTableCell align="center">
+                  {row.close.toFixed(4)}
+                </StyledTableCell>
+                <StyledTableCell align="center">
+                  {row.close.toFixed(4)}
+                </StyledTableCell>
+              </StyledTableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </TableContainer>
@@ -120,6 +126,8 @@ const App = () => {
   const [period, setPeriod] = useState(30);
   const [dataPeriod, setDataPeriod] = useState("1y");
   const [stockData, setStockData] = useState({});
+  const [error, setError] = useState("");
+  const [isError, setIsError] = useState(false);
 
   const [dataToggle, setDataToggle] = useState(false);
   const [predictToggle, setPredictToggle] = useState(false);
@@ -129,27 +137,69 @@ const App = () => {
   const handleGetData = async (ticker, dataPeriod) => {
     const data = { ticker, period, dataPeriod };
     try {
+      setIsError(false);
       const apiData = await api.post("/getData", data);
       console.log(apiData);
+      // eslint-disable-next-line no-throw-literal
+      if (apiData.data.length === 0) throw "Ticker not found or incorrect.";
       setStockData(apiData.data);
-      setDataToggle(false);
-      setPredictToggle(true);
+      setPredictToggle(false);
+      setDataToggle(true);
     } catch (error) {
-      console.error(error);
+      setIsError(true);
+      setError("Ticker not found or incorrect.");
+      setPredictToggle(false);
+      setDataToggle(false);
     }
-    setPredictToggle(false);
-    setDataToggle(true);
   };
 
   const handlePredict = async (ticker, period, dataPeriod) => {
     const data = { ticker, period, dataPeriod };
     try {
-      const apiData = await api.post("/getForecast", data);
-      console.log(apiData);
+      // eslint-disable-next-line no-throw-literal
+      setIsError(false);
       setDataToggle(false);
       setPredictToggle(true);
+      const apiData = await api.post("/getForecast", data);
+      console.log(apiData.data);
+      let chart = am4core.create("chartdiv", am4charts.XYChart);
+      chart.paddingRight = 20;
+
+      chart.data = apiData.data;
+
+      let dateAxis = chart.xAxes.push(new am4charts.DateAxis());
+      dateAxis.renderer.grid.template.location = 0;
+
+      let valueAxis = chart.yAxes.push(new am4charts.ValueAxis());
+      valueAxis.tooltip.disabled = true;
+      valueAxis.renderer.minWidth = 35;
+
+      let series = chart.series.push(new am4charts.LineSeries());
+      series.dataFields.dateX = "date";
+      series.dataFields.valueY = "close";
+
+      series.tooltipText = "{valueY}";
+      chart.cursor = new am4charts.XYCursor();
+
+      let scrollbarX = new am4charts.XYChartScrollbar();
+      scrollbarX.series.push(series);
+      chart.scrollbarX = scrollbarX;
+      let range = dateAxis.axisRanges.create();
+      range.date = new Date();
+      range.grid.stroke = am4core.color("red");
+      range.grid.strokeWidth = 2;
+      range.grid.strokeOpacity = 1;
     } catch (error) {
-      console.error(error);
+      setIsError(true);
+      if (period === "" && ticker === "") {
+        setError("Ticker & Prediction field not mentioned.");
+      } else if (period === "") {
+        setError("Prediction field not mentioned.");
+      } else {
+        setError("Ticker not found or incorrect.");
+      }
+      setPredictToggle(false);
+      setDataToggle(false);
     }
   };
 
@@ -159,6 +209,8 @@ const App = () => {
     setDataPeriod("");
     setDataToggle(false);
     setPredictToggle(false);
+    setError("");
+    setIsError(false);
   };
 
   return (
@@ -249,8 +301,13 @@ const App = () => {
             </Button>
           </Grid>
         </Grid>
+        {isError ? <>{error}</> : <></>}
         {dataToggle ? <DataTable data={stockData} /> : <></>}
-        {predictToggle ? <>Predition</> : <></>}
+        {predictToggle ? (
+          <div id="chartdiv" style={{ width: "100%", height: "500px" }}></div>
+        ) : (
+          <></>
+        )}
       </Container>
     </div>
   );

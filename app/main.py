@@ -33,8 +33,10 @@ def getTickerForcast(ticker, period, dataPeriod):
     m.fit(df)
     future = m.make_future_dataframe(periods=period)
     prediction = m.predict(future)
-    prediction = prediction.tail(period)
-    return prediction.to_dict('records')
+    return pd.DataFrame({
+        'date': prediction['ds'].values,
+        'close': prediction['yhat'].values
+    }).to_dict('records')
 
 
 def getTickerData(ticker, dataPeriod):
